@@ -13,22 +13,24 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#  Version: ROM Builder 0.5
+#  Version: ROM Builder 0.6
 #  Updated: 8/10/2019
 #
 
 #!/bin/bash
 
-# Create build-rom.cfg variables
+# Import/create build-rom.cfg variables
 rm -rf build-rom.cfg
 cat > build-rom.cfg << EOF
 rompath=$(pwd)
 bliss_device=""
+bliss_debug=""
 build_options=""
 bliss_branch=""
 rom_variant=""
 clean="n"
 cleanOption=""
+debug="n"
 official="n"
 officialOption=""
 patchOption=""
@@ -55,30 +57,19 @@ elif [[ $(uname -s) = "Linux" ]];then
         jobs=$(nproc)
 fi
 
-
 # Code that interputs the command line switches
 while test $# -gt 0
 do
   case $1 in
 
   # Normal option processing
-    -h | --help)
-      echo "Usage: $0 options device_name"
-      echo "options:"
-      echo "-c | --clean    : Does make clean && make clobber"
-      echo "-o | --official : Builds the rom as OFFICIAL"
-      echo "-s | --sync     : Repo sync repos"
-      echo "-u | --upload   : Uploads Official Builds to Bliss and Local sFTP"
-      echo "-----------------------------------------------------------------"
-      echo "Treble Only Flags"
-      echo "-----------------------------------------------------------------"
-      echo "-p | --patch    : "
-      echo "-r | --release  : "
-      echo ""
-      ;;
     -c | --clean)
       clean="y";
       echo "Clean build."
+      ;;
+    -d | --debug)
+      debug="y";
+      echo "Build Debug/eng build for testing **OFFICIAL BUILDS ARE DISABLED IN DEBUG MODE**"
       ;;
     -s | --sync)
       sync="y"
@@ -132,27 +123,78 @@ do
   shift
 done
 
+# these variables can't be stored in the .cfg file
+bliss_branch=$3
+bliss_device=$2
+rom_variant=$1
+build_options=$cleanOption$syncOption$officialOption$patchOption$releaseOption
+
+# If build_options is not empty add the - options flag
+if [ ! -z $build_options ];then
+   build_options=-$cleanOption$syncOption$officialOption$patchOption$releaseOption
+fi
+
+display_help(){
+ echo "Usage: $0 options arm/treble device_name"
+      echo "options:"
+      echo "-c | --clean    : Does make clean && make clobber"
+      echo "-o | --official : Builds the rom as OFFICIAL"
+      echo "-s | --sync     : Repo sync repos"
+      echo "-u | --upload   : Uploads Official Builds to Bliss and Local sFTP"
+      echo "-----------------------------------------------------------------"
+      echo "Treble Only Flags"
+      echo "-----------------------------------------------------------------"
+      echo "-p | --patch    : "
+      echo "-r | --release  : "
+      echo ""
+}
+
+# If rom_variant is empty, stop the script
+if [[ -z $rom_variant || ! $rom_variant == "arm" ]];then
+   clear
+   echo "==========================="
+   echo "No Rom variant was selected"
+   echo "==========================="
+   display_help
+   exit
+fi
+
+# If bliss_device is empty, stop the script
+if [ -z $bliss_device ];then
+    clear
+    echo "======================"
+    echo "No Device was selected"
+    echo "======================"
+    display_help
+    exit
+fi
+
 read -p "Continuing in 1 second..." -t 1
 echo "Continuing..."
 
 # If statement for $sync
 if  [[ $sync == "y" && $1 = "arm" ]];then
     repo sync -c -j$jobs --force-sync
-#elif [ $sync == "y" ];then
     syncOption="s"
 fi
 
 # If statment for $clean
 if [[ $clean == "y" && $1 = "arm" ]];then
     make -j$jobs clean
-#elif [ $clean == "y" ];then
     cleanOption="c"
 fi
 
+# If statment for $debug
+if [[ $debug == "y" && $1 = "arm" ]];then
+    bliss_debug="eng"
+else
+    bliss_debug="userdebug"
+fi
+
+
 # If statement for $official
-if [[ $official == "y" && $1 = "arm" ]];then
+if [[ $official == "y" && $1 = "arm" && $debug == "n" ]];then
     export BLISS_BUILDTYPE=OFFICIAL
-#elif [ $official == "y" ];then
     officialOption="o"
 else
     export BLISS_BUILDTYPE=UNOFFICIAL
@@ -198,7 +240,7 @@ EOF
 
 # Build rom function
 blissBuildVariant_arm() {
-        lunch bliss_$2-userdebug
+        lunch bliss_$2-$bliss_debug
         make -j$jobs blissify
 }
 
@@ -207,32 +249,10 @@ blissBuildVariant_treble() {
        bash /build/make/core/treble/build-treble.sh $1 $2 $3
 }
 
-bliss_branch=$3
-bliss_device=$2
-rom_variant=$1
-build_options=$cleanOption$syncOption$officialOption$patchOption$releaseOption
-
-# If rom_variant is empty, stop the script
-if [ -z $rom_variant ];then
-  echo "No Rom variant was selected"
-  exit
-fi
-
-# If bliss_device is empty, stop the script
-if [ -z $bliss_device ];then
-  echo "No Device was selected"
-  exit
-fi
-
-# If build_options is not empty add the - options flag
-if [ ! -z "$build_options" ];then
-   build_options=-$cleanOption$syncOption$officialOption$patchOption$releaseOption
-fi
-
 # If statment for building arm or treble
 if [ $rom_variant = "arm" ];then
    . build/envsetup.sh
-   blissBuildVariant_arm $rom_variant $bliss_device
+   blissBuildVariant_arm $rom_variant $bliss_device $bliss_debug
 
 elif [ $rom_variant = "treble" ];then
    blissBuildVariant_treble $build_options $bliss_device $bliss_branch
