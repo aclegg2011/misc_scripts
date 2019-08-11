@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-#  Version: ROM Builder 0.6
+#  Version: ROM Builder 0.7
 #  Updated: 8/10/2019
 #
 
@@ -37,7 +37,6 @@ patchOption=""
 releaseOption=""
 sync="n"
 syncOption=""
-upload="n"
 EOF
 
 #Import build-rom.cfg variables
@@ -86,10 +85,6 @@ do
     -r | --release)
       releaseOption="r";
       echo "Building as release selected."
-      ;;
-    -u | --upload)
-      upload="y"
-      echo "Upload to Bliss and Personal sFTP."
       ;;
   # ...
 
@@ -140,7 +135,6 @@ display_help(){
       echo "-c | --clean    : Does make clean && make clobber"
       echo "-o | --official : Builds the rom as OFFICIAL"
       echo "-s | --sync     : Repo sync repos"
-      echo "-u | --upload   : Uploads Official Builds to Bliss and Local sFTP"
       echo "-----------------------------------------------------------------"
       echo "Treble Only Flags"
       echo "-----------------------------------------------------------------"
@@ -200,44 +194,6 @@ else
     export BLISS_BUILDTYPE=UNOFFICIAL
 fi
 
-# Official Bliss FTP server upload function
-blissSFTP(){
-FILEPATH=$rompath/out/target/product/$bliss_variant_name
-cd $FILEPATH
-echo ""
-BLISSZIP=$(ls Bliss-*.zip)
-BLISSMD5=$(ls Bliss-*.md5)
-BLISSLOG=$(ls Changelog-Bliss-*.txt)
-
-if [[ -a $BLISSZIP && -a $BLISSMD5 && -a $BLISSLOG ]]; then
-   echo $BLISSZIP
-   echo $BLISSMD5
-   echo $BLISSLOG
-else
-   echo "Upload(s) Failed due to missing files"
-   return 0
-fi
-
-BLISSPASS=password
-sshpass -p $password sftp -P xx xxxx@xxxx <<EOF
-cd Pie/$bliss_variant_name
-put $BLISSZIP
-put $BLISSMD5
-put $BLISSLOG
-bye
-EOF
-
-BLISSPASS=password
-sshpass -p $BLISSPASS sftp -P xx xxx@xxx <<EOF
-cd $bliss_variant_name
-put $BLISSZIP
-put $BLISSMD5
-put $BLISSLOG
-bye
-EOF
-
-}
-
 # Build rom function
 blissBuildVariant_arm() {
         lunch bliss_$2-$bliss_debug
@@ -256,9 +212,4 @@ if [ $rom_variant = "arm" ];then
 
 elif [ $rom_variant = "treble" ];then
    blissBuildVariant_treble $build_options $bliss_device $bliss_branch
-fi
-
-# If statment for FTP uploading
-if [[ $upload == "y" && $official="y" ]];then
-   blissSFTP $bliss_device
 fi
